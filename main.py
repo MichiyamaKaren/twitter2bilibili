@@ -31,7 +31,7 @@ async def forwarding(listener: TwitterListener, tweet: Tweet):
     display_text = ''
     # 剧透预警
     for hashtag in tweet.entities.get('hashtags', []):
-        if hashtag['text'] == '劇場版スタァライトネタバレ':
+        if hashtag['tag'] == '劇場版スタァライトネタバレ':
             display_text += '【剧透预警】本篇推文中含有少歌剧场版剧透内容\n'
 
     display_text += '{}于{}'.format(
