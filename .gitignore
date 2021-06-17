@@ -1,0 +1,18 @@
+# config file
+config.py
+
+# test file
+test.py
+
+# program data
+pic_dir/
+
+# python cache
+__pycache__/
+
+# vscode
+.vscode/
+
+# log file
+*.log
+*.out
