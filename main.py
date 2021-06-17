@@ -27,11 +27,18 @@ async def forwarding(listener: TwitterListener, tweet: Tweet):
     if tweet.type == 'replied_to':
         # 待进一步实现
         return
-    display_text = '{}于{}'.format(
+
+    display_text = ''
+    # 剧透预警
+    for hashtag in tweet.entities.get('hashtags', []):
+        if hashtag['text'] == '劇場版スタァライトネタバレ':
+            display_text += '【剧透预警】本篇推文中含有少歌剧场版剧透内容\n'
+
+    display_text += '{}于{}'.format(
         listener.get_author_name(tweet.author),
         tweet.get_create_time(display_timezone).strftime('%Y-%m-%d %H:%M:%S'))
     if tweet.type == 'original':
-        display_text += '发推：\n'+tweet.parse_text()
+        display_text += '发推：\n' + tweet.parse_text()
     else:
         display_text += '转发了{}于{}的推特：\n'.format(
             listener.get_author_name(tweet.referenced_tweet.author),
@@ -50,12 +57,16 @@ async def forwarding(listener: TwitterListener, tweet: Tweet):
     media_paths = [os.path.join(pic_dir, media.key) for media in photo_media]
     download_pic_coroutines = [media.get_photo(
         path) for media, path in zip(photo_media, media_paths)]
-    for future in asyncio.as_completed(download_pic_coroutines):
-        await future
-    await sender.send(display_text, media_paths)
+
+    try:
+        for future in asyncio.as_completed(download_pic_coroutines):
+            await future
+        await sender.send(display_text, media_paths)
+    except Exception as e:
+        logging.error(f'Error: {e} on tweet id {tweet.id}')
     for path in media_paths:
         os.remove(path)
-    
+
     logging.info(f'Forwarded {tweet.author.username}\'s twitter.')
 
 query = {'expansions': 'author_id,attachments.media_keys,referenced_tweets.id',
