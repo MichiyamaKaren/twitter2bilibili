@@ -2,8 +2,9 @@ import json
 import aiohttp
 import asyncio
 from signal import SIGINT, SIGTERM
+from loguru import logger
 
-from .tweet import Tweet, TwitterUser, TwitterMedia
+from .tweet import Tweet, TwitterUser
 
 from typing import Dict, List, Coroutine, Callable
 
@@ -78,17 +79,27 @@ class TwitterListener:
                      tweet_handler: Callable[['TwitterListener', Tweet], Coroutine]):
         await initialize(self)
         timeout = aiohttp.ClientTimeout(None)  # 永不超时
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.get(self.STREAM_URL, params=query, headers=self._headers) as response:
-                if response.status != 200:
-                    raise Exception(f'Cannot get stream (HTTP {response.status}): {await response.text()}')
-                async for response_line in response.content:
-                    if response_line != b'\r\n':  # '\r\n'为filtered stream的keep alive信号
-                        tweets_response = json.loads(response_line)
-                        tweets = self._split_tweets_response(tweets_response)
-                        for future in asyncio.as_completed([
-                            tweet_handler(self, tweet) for tweet in tweets]):
-                            await future
+        while True:
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                try:
+                    async with session.get(self.STREAM_URL, params=query, headers=self._headers) as response:
+                        if response.status != 200:
+                            raise Exception(f'Cannot get stream (HTTP {response.status}): {await response.text()}')
+                        async for response_line in response.content:
+                            if response_line != b'\r\n':  # '\r\n'为filtered stream的keep alive信号
+                                tweets_response = json.loads(response_line)
+                                try:
+                                    tweets = self._split_tweets_response(tweets_response)
+                                    for future in asyncio.as_completed([
+                                        tweet_handler(self, tweet) for tweet in tweets]):
+                                        await future
+                                except Exception as e:
+                                    logger.error(f'Error {e} on response:\n {tweets_response}')
+                except Exception as e:
+                    logger.error(f'Connection closed due to error: {e}')
+                    await session.close()
+            await asyncio.sleep(60)    # 因为奇怪原因断连之后睡一段时间再重连上
+            logger.info('Reconnected.')
 
     def run(self, initialize: Callable[['TwitterListener'], Coroutine], query: Dict,
             tweet_handler: Callable[['TwitterListener', Tweet], Coroutine]):

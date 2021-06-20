@@ -1,6 +1,6 @@
 import os
-import logging
 import asyncio
+from loguru import logger
 
 from twitter2bilibili import TwitterListener, BiliSender
 from twitter2bilibili import Tweet
@@ -11,16 +11,16 @@ from config import TWITTER_BEARER_TOKEN, BILI_BILI_JCT, BILI_BUVID3, BILI_SESSDA
 
 sender = BiliSender(sessdata=BILI_SESSDATA, bili_jct=BILI_BILI_JCT, buvid3=BILI_BUVID3)
 
-logging.basicConfig(filename='main.log', level=logging.DEBUG,
-                    format='%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+logger.add('t2b.log')
 
 
 async def initialize_listener(listener: TwitterListener):
     await listener.get_rules()
     all_ids = [rule['id'] for rule in listener.rules]
     await listener.delete_rules(all_ids)
-    await listener.add_rules(listener._make_rules('test'))
-    print(listener.rules)
+    await listener.add_rules(listener._make_rules('kukugumi'))
+    logger.info(f'Start listening on rules: {listener.rules}')
+    await sender.send('启动')
 
 
 async def forwarding(listener: TwitterListener, tweet: Tweet):
@@ -63,11 +63,13 @@ async def forwarding(listener: TwitterListener, tweet: Tweet):
             await future
         await sender.send(display_text, media_paths)
     except Exception as e:
-        logging.error(f'Error: {e} on tweet id {tweet.id}')
-    for path in media_paths:
-        os.remove(path)
+        logger.error(f'Error: {e} on tweet id {tweet.id}')
+    else:
+        logger.info(f'Forwarded {tweet.author.username}\'s twitter.')
+    finally:
+        for path in media_paths:
+            os.remove(path)
 
-    logging.info(f'Forwarded {tweet.author.username}\'s twitter.')
 
 query = {'expansions': 'author_id,attachments.media_keys,referenced_tweets.id',
          'tweet.fields': 'created_at,entities,in_reply_to_user_id,referenced_tweets,text',
