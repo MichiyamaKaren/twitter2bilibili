@@ -61,14 +61,11 @@ async def forwarding(listener: TwitterListener, tweet: Tweet):
     try:
         for future in asyncio.as_completed(download_pic_coroutines):
             await future
-        await sender.send(
-            display_text, media_paths,
-            msg_on_illegal_words='{}发了一条推特，这里本应有其内容，但包含了我也不知道是什么的特殊词汇发不出去'.format(
-                listener.get_author_name(tweet.author)))
+        await sender.send(display_text, media_paths)
     except Exception as e:
         logger.error(f'Error: {e} on tweet id {tweet.id}')
     else:
-        logger.info(f'Forwarded {tweet.author.username}\'s twitter.')
+        logger.info(f'Forwarded {tweet.author.username}\'s twitter, id {tweet.id}')
     finally:
         for path in media_paths:
             os.remove(path)
