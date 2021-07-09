@@ -24,6 +24,10 @@ async def initialize_listener(listener: TwitterListener):
 
 
 async def forwarding(listener: TwitterListener, tweet: Tweet):
+    if tweet.type == 'retweeted':
+        # 不带内容转推，认为是纯工商推，不处理
+        return
+
     if tweet.type == 'replied_to':
         # 待进一步实现
         return
@@ -40,14 +44,11 @@ async def forwarding(listener: TwitterListener, tweet: Tweet):
     if tweet.type == 'original':
         display_text += '发推：\n' + tweet.parse_text()
     else:
-        display_text += '转发了{}于{}的推特：\n'.format(
+        display_text += '转发了{}的推特：\n{}\n----------\n原推：\n{}'.format(
             listener.get_author_name(tweet.referenced_tweet.author),
-            tweet.referenced_tweet.get_create_time(display_timezone),
+            tweet.parse_text(),
             tweet.referenced_tweet.parse_text()
         )
-        if tweet.type == 'quoted':
-            display_text += tweet.parse_text()+'\n'
-        display_text += '----------\n原推：\n'+tweet.referenced_tweet.parse_text()
 
     # 处理图片
     pic_dir = 'pic_dir'
