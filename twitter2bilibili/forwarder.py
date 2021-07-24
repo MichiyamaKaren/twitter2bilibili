@@ -90,17 +90,14 @@ class T2BForwarder:
         display_text = self.get_display_text(tweet)
         try:
             media_paths = await self._download_media(tweet)
-            #await self.sender.send(display_text, media_paths)
-            print(display_text)
-            print(media_paths)
+            await self.sender.send(display_text, media_paths)
         except Exception as e:
             logger.error(f'Error: {e} on tweet id {tweet.id}')
         else:
             logger.info(
                 f'Forwarded {tweet.author.username}\'s twitter, id {tweet.id}')
         finally:
-            #self._delete_media(media_paths)
-            print('delete media')
+            self._delete_media(media_paths)
 
     def run(self):
         loop = asyncio.get_event_loop()
