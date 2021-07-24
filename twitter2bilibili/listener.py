@@ -1,7 +1,6 @@
 import json
 import aiohttp
 import asyncio
-from signal import SIGINT, SIGTERM
 from loguru import logger
 
 from .tweet import Tweet, TwitterUser
@@ -76,7 +75,7 @@ class TwitterListener:
         return tweets
 
     async def listen(self, initialize: Callable[['TwitterListener'], Coroutine], query: Dict,
-                     tweet_handler: Callable[['TwitterListener', Tweet], Coroutine]):
+                     tweet_handler: Callable[[Tweet], Coroutine]):
         await initialize(self)
         timeout = aiohttp.ClientTimeout(None)  # 永不超时
         while True:
@@ -90,9 +89,7 @@ class TwitterListener:
                                 tweets_response = json.loads(response_line)
                                 try:
                                     tweets = self._split_tweets_response(tweets_response)
-                                    for future in asyncio.as_completed([
-                                        tweet_handler(self, tweet) for tweet in tweets]):
-                                        await future
+                                    await asyncio.gather(*[tweet_handler(tweet) for tweet in tweets])
                                 except Exception as e:
                                     logger.error(f'Error {e} on response:\n {tweets_response}')
                 except Exception as e:
@@ -100,12 +97,3 @@ class TwitterListener:
                     await session.close()
             await asyncio.sleep(60)    # 因为奇怪原因断连之后睡一段时间再重连上
             logger.info('Reconnected.')
-
-    def run(self, initialize: Callable[['TwitterListener'], Coroutine], query: Dict,
-            tweet_handler: Callable[['TwitterListener', Tweet], Coroutine]):
-        loop = asyncio.get_event_loop()
-        task = asyncio.ensure_future(self.listen(initialize, query, tweet_handler))
-        # Ctrl C退出
-        for signal in [SIGINT, SIGTERM]:
-            loop.add_signal_handler(signal, task.cancel)
-        loop.run_until_complete(task)
