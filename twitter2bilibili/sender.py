@@ -39,7 +39,7 @@ class BiliSender:
 
     @_handle_illegal_word
     async def send_comment(self, text: str, dynamic_id: int):
-        type_map = {
+        type_map = {     # 1是转发动态，4为原创文字动态
             1:ResourceType.DYNAMIC, 2:ResourceType.DYNAMIC_DRAW,
             4:ResourceType.DYNAMIC, 8:ResourceType.VIDEO,
             64:ResourceType.ARTICLE, 256:ResourceType.AUDIO}
@@ -48,7 +48,7 @@ class BiliSender:
         info = await dynamic.get_info()
         type_ = type_map[info['desc']['type']]
         oid = info['desc']['rid']
-        if info['desc']['type'] == 1:   # 1是转发动态，其oid为动态id
+        if type_ == ResourceType.DYNAMIC:
             oid = dynamic_id
         return await send_comment(text=text, oid=oid, type_=type_, credential=self.credential)
 
