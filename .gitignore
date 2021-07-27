@@ -3,9 +3,11 @@ config.py
 
 # test file
 test.py
+test_*.py
 
 # program data
-pic_dir/
+*.png
+*.json
 
 # python cache
 __pycache__/
