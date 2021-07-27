@@ -27,11 +27,10 @@ class TwitterMedia:
         else:
             self.url = None
 
-    async def get_photo(self, path: str):
+    async def get_photo(self) -> bytes:
         async with aiohttp.ClientSession() as session:
             async with session.get(self.url) as response:
-                with open(path, 'wb') as f:
-                    f.write(await response.read())
+                return await response.read()
 
 
 class TwitterPlace:

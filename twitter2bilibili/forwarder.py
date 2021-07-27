@@ -3,11 +3,24 @@ import asyncio
 from signal import SIGINT, SIGTERM
 from loguru import logger
 
+import json
+from datetime import datetime, timedelta
+
 from .listener import TwitterListener
 from .sender import BiliSender
 from .tweet import Tweet
 
-from typing import List, Dict
+from typing import List, Dict, Tuple, Optional
+
+
+class AbortForwarding(Exception):
+    pass
+
+
+class RetryForwarding(Exception):
+    def __init__(self, tweet_id: int, *args: object) -> None:
+        super().__init__(*args)
+        self.tweet_id = tweet_id
 
 
 class T2BForwarder:
@@ -21,24 +34,15 @@ class T2BForwarder:
             buvid3=getattr(config_object, 'BILI_BUVID3'))
 
         self.display_timezone: str = getattr(config_object, 'display_timezone')
-        self.media_dir: str = getattr(config_object, 'media_dir', 'media_dir')
-        if not os.path.exists(self.media_dir):
-            os.mkdir(self.media_dir)
 
-    async def _download_media(self, tweet: Tweet) -> List[str]:
+        self._forward_info_file = 'forward_info.json'
+        self._forward_info_valid_time = timedelta(weeks=1)
+
+    async def _download_photos(self, tweet: Tweet) -> List[bytes]:
         photo_media = [media for media in tweet.media if media.type == 'photo']
-        media_paths = [os.path.join(self.media_dir, media.key)
-                       for media in photo_media]
-
-        download_pic_coroutines = [media.get_photo(
-            path) for media, path in zip(photo_media, media_paths)]
-        await asyncio.gather(*download_pic_coroutines)
-
-        return media_paths
-
-    def _delete_media(self, media_paths: List[str]):
-        for path in media_paths:
-            os.remove(path)
+        download_photo_coroutines = [media.get_photo()
+                                     for media in photo_media]
+        return await asyncio.gather(*download_photo_coroutines)
 
     @property
     def query(self) -> Dict:
@@ -54,50 +58,130 @@ class T2BForwarder:
         await listener.add_rules(listener._make_rules('t2b'))
         logger.info(f'Start listening on rules: {listener.rules}')
 
-    def tweet_filter(self, tweet: Tweet) -> bool:
-        if tweet.type == 'retweeted':
-            # 不带内容转推，认为是纯工商推，不处理
-            return False
-        if tweet.type == 'replied_to':
-            # 待进一步实现
-            return False
-        return True
+    def _load_forward_info_file(self) -> Dict:
+        if not os.path.exists(self._forward_info_file):
+            return {}
+        with open(self._forward_info_file, 'r') as f:
+            forward_info = json.load(f)
+        return forward_info
 
-    def get_display_text(self, tweet: Tweet) -> str:
-        display_text = ''
+    def _filter_valid_forward_info(self, forward_info: Dict) -> Dict:
+        valid_forward_info = forward_info.copy()
+        now = datetime.now()
+        for key, value in valid_forward_info.items():
+            time = datetime.strptime(value['time'], '%Y-%m-%d %H:%M:%S')
+            if now-time > self._forward_info_valid_time:
+                valid_forward_info.pop(key)
+        return valid_forward_info
+
+    def _save_forward_info_file(self, forward_info: Dict):
+        valid_forward_info = self._filter_valid_forward_info(forward_info)
+        with open(self._forward_info_file, 'w') as f:
+            json.dump(valid_forward_info, f)
+
+    def save_forward_info(self, tweet: Tweet, dynamic_id: int):
+        forward_info = self._load_forward_info_file()
+        forward_info[tweet.id] = {
+            'dynamic_id': dynamic_id, 'time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+        self._save_forward_info_file(forward_info)
+
+    def get_forward_dynamic_id(self, tweet_id: int) -> Optional[int]:
+        forward_info = self._load_forward_info_file()
+        return forward_info[str(tweet_id)]['dynamic_id']  # json存储时会将整数key转成字符串
+
+    def _check_spoiler(self, tweet: Tweet) -> bool:
         # 剧透预警
         for hashtag in tweet.entities.get('hashtags', []):
             if hashtag['tag'] == '劇場版スタァライトネタバレ':
-                display_text += '【剧透预警】本篇推文中含有少歌剧场版剧透内容\n'
+                return True
 
-        display_text += '{}于{}'.format(
+    def get_forward_action(self, tweet: Tweet) -> Tuple[str, Optional[int]]:
+        if tweet.type == 'retweeted':
+            # 不带内容转推，认为是纯工商推，不处理
+            raise AbortForwarding
+
+        if (tweet.referenced_tweet is not None) and (tweet.referenced_tweet.author.username in self.listener.subscribe_users):
+            dynamic_id = self.get_forward_dynamic_id(tweet.referenced_tweet.id)
+            if tweet.type == 'replied_to':
+                if dynamic_id is not None:
+                    return 'comment', dynamic_id
+                else:
+                    # 只搬对已经转到B站的推的评论
+                    raise AbortForwarding
+            elif tweet.type == 'quoted':
+                if dynamic_id is not None:
+                    return ('send', dynamic_id) if tweet.media_keys else ('repost', dynamic_id)
+        return 'send', None
+
+    async def on_send_dynamic(self, tweet: Tweet, dynamic_id: Optional[int]):
+        text = ''
+        if self._check_spoiler(tweet):
+            text += '【剧透预警】本篇推文中含有少歌剧场版剧透内容\n'
+
+        text += '{}于{}'.format(
             self.listener.get_author_name(tweet.author),
             tweet.get_create_time(self.display_timezone).strftime('%Y-%m-%d %H:%M:%S'))
         if tweet.type == 'original':
-            display_text += '发推：\n' + tweet.parse_text()
-        else:
-            display_text += '转发了{}的推特：\n{}\n----------\n原推：\n{}'.format(
+            text += '发推：\n' + tweet.parse_text()
+        elif tweet.type == 'quoted':
+            text += '转发了{}的推特：\n{}\n----------\n原推：'.format(
                 self.listener.get_author_name(tweet.referenced_tweet.author),
-                tweet.parse_text(),
-                tweet.referenced_tweet.parse_text()
+                tweet.parse_text()
             )
-        return display_text
+            if dynamic_id is None:
+                text += '\n' + tweet.referenced_tweet.parse_text()
+            else:
+                text += f'https://t.bilibili.com/{dynamic_id}'
+
+        photos = await self._download_photos(tweet)
+        response = await self.sender.send(text=text, image_streams=photos)
+        self.save_forward_info(tweet, response['dynamic_id'])
+
+    async def on_repost(self, tweet: Tweet, dynamic_id: int):
+        text = ''
+        if self._check_spoiler(tweet):
+            text += '【剧透预警】本篇推文中含有少歌剧场版剧透内容\n'
+
+        text += '{}于{}转发了此条推：\n{}'.format(
+            self.listener.get_author_name(tweet.author),
+            tweet.get_create_time(self.display_timezone).strftime(
+                '%Y-%m-%d %H:%M:%S'),
+            tweet.parse_text())
+        if len(text) > 233:
+            # 超过转发字数限制
+            # 由于动态转发API不会返回动态id，所以只能退而重发一条
+            await self.on_send_dynamic(tweet, dynamic_id)
+        else:
+            await self.sender.repost_dynamic(text=text, dynamic_id=dynamic_id)
+
+    async def on_comment(self, tweet: Tweet, dynamic_id: int):
+        text = ''
+        if self._check_spoiler(tweet):
+            text += '【剧透预警】本条评论中含有少歌剧场版剧透内容\n'
+
+        text += '{}于{}评论：\n{}'.format(
+            self.listener.get_author_name(tweet.author),
+            tweet.get_create_time(self.display_timezone).strftime(
+                '%Y-%m-%d %H:%M:%S'),
+            tweet.parse_text())
+        await self.sender.send_comment(text=text, dynamic_id=dynamic_id)
 
     async def handler(self, tweet: Tweet):
-        if not self.tweet_filter(tweet):
-            return
+        action, dynamic_id = self.get_forward_action(tweet)
 
-        display_text = self.get_display_text(tweet)
         try:
-            media_paths = await self._download_media(tweet)
-            await self.sender.send(display_text, media_paths)
+            if action == 'send':
+                await self.on_send_dynamic(tweet, dynamic_id)
+            elif action == 'repost':
+                await self.on_repost(tweet, dynamic_id)
+            elif action == 'comment':
+                await self.on_comment(tweet, dynamic_id)
+        except AbortForwarding:
+            logger.debug(f'Aborted tweet id {tweet.id}')
         except Exception as e:
-            logger.error(f'Error: {e} on tweet id {tweet.id}')
+            logger.error(f'Error on tweet id {tweet.id}: {e}')
         else:
-            logger.info(
-                f'Forwarded {tweet.author.username}\'s twitter, id {tweet.id}')
-        finally:
-            self._delete_media(media_paths)
+            logger.info(f'Forwarded tweet id {tweet.id}')
 
     def run(self):
         loop = asyncio.get_event_loop()
