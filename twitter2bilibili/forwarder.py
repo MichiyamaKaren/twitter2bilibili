@@ -87,7 +87,10 @@ class T2BForwarder:
 
     def get_forward_dynamic_id(self, tweet_id: int) -> Optional[int]:
         forward_info = self._load_forward_info_file()
-        return forward_info[str(tweet_id)]['dynamic_id']  # json存储时会将整数key转成字符串
+        if str(tweet_id) in forward_info:     # json存储时会将整数key转成字符串
+            return forward_info[str(tweet_id)]['dynamic_id']
+        else:
+            return None
 
     def _check_spoiler(self, tweet: Tweet) -> bool:
         # 剧透预警
@@ -96,22 +99,26 @@ class T2BForwarder:
                 return True
 
     def get_forward_action(self, tweet: Tweet) -> Tuple[str, Optional[int]]:
-        if tweet.type == 'retweeted':
+        if tweet.type == 'original':
+            return 'send', None
+        elif tweet.type == 'retweeted':
             # 不带内容转推，认为是纯工商推，不处理
             raise AbortForwarding
-
-        if (tweet.referenced_tweet is not None) and (tweet.referenced_tweet.author.username in self.listener.subscribe_users):
-            dynamic_id = self.get_forward_dynamic_id(tweet.referenced_tweet.id)
-            if tweet.type == 'replied_to':
-                if dynamic_id is not None:
-                    return 'comment', dynamic_id
-                else:
-                    # 只搬对已经转到B站的推的评论
-                    raise AbortForwarding
-            elif tweet.type == 'quoted':
-                if dynamic_id is not None:
-                    return ('send', dynamic_id) if tweet.media_keys else ('repost', dynamic_id)
-        return 'send', None
+        else:
+            ref_subscribed = tweet.referenced_tweet.author.username in self.listener.subscribe_users
+            if tweet.type == 'quoted':
+                if ref_subscribed:
+                    dynamic_id = self.get_forward_dynamic_id(tweet.referenced_tweet.id)
+                    if dynamic_id is not None:
+                        return ('send', dynamic_id) if tweet.media_keys else ('repost', dynamic_id)
+                return 'send', None
+            elif tweet.type == 'replied_to':
+                if ref_subscribed:
+                    dynamic_id = self.get_forward_dynamic_id(tweet.referenced_tweet.id)
+                    if dynamic_id is not None:
+                        return 'comment', dynamic_id
+                # 只搬对已经转到B站的推的评论
+                raise AbortForwarding
 
     async def on_send_dynamic(self, tweet: Tweet, dynamic_id: Optional[int]):
         text = ''
@@ -167,9 +174,8 @@ class T2BForwarder:
         await self.sender.send_comment(text=text, dynamic_id=dynamic_id)
 
     async def handler(self, tweet: Tweet):
-        action, dynamic_id = self.get_forward_action(tweet)
-
         try:
+            action, dynamic_id = self.get_forward_action(tweet)
             if action == 'send':
                 await self.on_send_dynamic(tweet, dynamic_id)
             elif action == 'repost':
