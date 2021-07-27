@@ -6,6 +6,7 @@ from bilibili_api.exceptions import ResponseCodeException
 import emoji
 
 from typing import List, Optional
+from io import BufferedIOBase
 
 
 def _handle_illegal_word(func):
@@ -33,8 +34,8 @@ class BiliSender:
         self.credential = Credential(sessdata, bili_jct, buvid3)
 
     @_handle_illegal_word
-    async def send(self, text: str, images: Optional[List[str]] = None):
-        await send_dynamic(text=text, images_path=images, credential=self.credential)
+    async def send(self, text: str, image_streams: Optional[List[BufferedIOBase]] = None):
+        return await send_dynamic(text=text, image_streams=image_streams, credential=self.credential)
 
     @_handle_illegal_word
     async def send_comment(self, text: str, dynamic_id: int):
