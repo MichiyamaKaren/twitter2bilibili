@@ -23,7 +23,7 @@ def _handle_illegal_word(func):
         except ResponseCodeException as e:
             if e.code == 2200108:
                 text = emoji.demojize(text, delimiters=('[emoji ', ']'))
-                return await func(text, *args, **kwargs)
+                return await func(self, text, *args, **kwargs)
             else:
                 raise e
     return wrapped_func
