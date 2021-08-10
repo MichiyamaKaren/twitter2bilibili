@@ -68,7 +68,7 @@ class T2BForwarder:
     def _filter_valid_forward_info(self, forward_info: Dict) -> Dict:
         valid_forward_info = forward_info.copy()
         now = datetime.now()
-        for key, value in valid_forward_info.items():
+        for key, value in forward_info.items():
             time = datetime.strptime(value['time'], '%Y-%m-%d %H:%M:%S')
             if now-time > self._forward_info_valid_time:
                 valid_forward_info.pop(key)
@@ -97,6 +97,7 @@ class T2BForwarder:
         for hashtag in tweet.entities.get('hashtags', []):
             if hashtag['tag'] == '劇場版スタァライトネタバレ':
                 return True
+        return False
 
     def get_forward_action(self, tweet: Tweet) -> Tuple[str, Optional[int]]:
         if tweet.type == 'original':
