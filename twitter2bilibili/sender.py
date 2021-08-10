@@ -11,7 +11,9 @@ from io import BufferedIOBase
 
 def _handle_illegal_word(func):
     ILLEGAL_EMOJEES = {
-        '🐴': '马', '🐻': '熊', '🔥': '火', '🗼': '塔'
+        '🐴': '马', '🐻': '熊', '🔥': '火', '🗼': '塔',
+        '🐧': '企鹅', '💡': '灯泡', '🐎': '马', '🐠': '热带鱼',
+        '🏀': '篮球', '🐶':'狗', '⚽': '足球'
     }
 
     async def wrapped_func(self, text: str, *args, **kwargs):
