@@ -11,6 +11,7 @@ test_*.py
 
 # python cache
 __pycache__/
+*.pyc
 
 # vscode
 .vscode/
