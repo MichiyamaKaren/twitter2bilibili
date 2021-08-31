@@ -4,6 +4,7 @@ from bilibili_api.comment import send_comment, ResourceType
 from bilibili_api.exceptions import ResponseCodeException
 
 import emoji
+from functools import wraps
 
 from typing import List, Optional
 from io import BufferedIOBase
@@ -16,16 +17,17 @@ def _handle_illegal_word(func):
         '🏀': '篮球', '🐶':'狗', '⚽': '足球', '🐢': '乌龟'
     }
 
-    async def wrapped_func(self, text: str, *args, **kwargs):
+    @wraps(func)
+    async def wrapped_func(text: str, *args, **kwargs):
         for emoji_chr, emoji_text in ILLEGAL_EMOJEES.items():
             if emoji_chr in text:
                 text = text.replace(emoji_chr, f'[emoji {emoji_text}]')
         try:
-            return await func(self, text=text, *args, **kwargs)
+            return await func(text=text, *args, **kwargs)
         except ResponseCodeException as e:
             if e.code == 2200108:
                 text = emoji.demojize(text, delimiters=('[emoji ', ']'))
-                return await func(self, text, *args, **kwargs)
+                return await func(text=text, *args, **kwargs)
             else:
                 raise e
     return wrapped_func
