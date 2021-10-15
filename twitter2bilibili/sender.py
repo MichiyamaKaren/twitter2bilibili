@@ -17,17 +17,16 @@ def _handle_illegal_word(func):
         '🏀': '篮球', '🐶':'狗', '⚽': '足球', '🐢': '乌龟'
     }
 
-    @wraps(func)
-    async def wrapped_func(text: str, *args, **kwargs):
+    async def wrapped_func(self, text: str, *args, **kwargs):
         for emoji_chr, emoji_text in ILLEGAL_EMOJEES.items():
             if emoji_chr in text:
                 text = text.replace(emoji_chr, f'[emoji {emoji_text}]')
         try:
-            return await func(text=text, *args, **kwargs)
+            return await func(self, text=text, *args, **kwargs)
         except ResponseCodeException as e:
             if e.code == 2200108:
                 text = emoji.demojize(text, delimiters=('[emoji ', ']'))
-                return await func(text=text, *args, **kwargs)
+                return await func(self, text=text, *args, **kwargs)
             else:
                 raise e
     return wrapped_func
