@@ -101,7 +101,7 @@ class Tweet:
             i = 0
             for url in urls:
                 expanded_url = url['expanded_url']
-                if ['unwound_url'] not in url:
+                if 'unwound_url' not in url:
                     expanded_url = ''   # 媒体的URL不含这个域
                 replaced_text += text[i:url['start']] + expanded_url
                 i = url['end']
