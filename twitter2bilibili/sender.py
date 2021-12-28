@@ -11,15 +11,15 @@ from io import BufferedIOBase
 
 
 def _handle_illegal_word(func):
-    ILLEGAL_EMOJEES = {
+    ILLEGAL_EMOJEE = {
         '🐴': '马', '🐻': '熊', '🔥': '火', '🗼': '塔',
         '🐧': '企鹅', '💡': '灯泡', '🐎': '马', '🐠': '热带鱼',
         '🏀': '篮球', '🐶':'狗', '⚽': '足球', '🐢': '乌龟',
-        '💉': '注射器'
+        '💉': '注射器', '2️⃣': '2'
     }
 
     async def wrapped_func(self, text: str, *args, **kwargs):
-        for emoji_chr, emoji_text in ILLEGAL_EMOJEES.items():
+        for emoji_chr, emoji_text in ILLEGAL_EMOJEE.items():
             if emoji_chr in text:
                 text = text.replace(emoji_chr, f'[emoji {emoji_text}]')
         try:
