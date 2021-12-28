@@ -92,13 +92,6 @@ class T2BForwarder:
         else:
             return None
 
-    def _check_spoiler(self, tweet: Tweet) -> bool:
-        # 剧透预警
-        for hashtag in tweet.entities.get('hashtags', []):
-            if hashtag['tag'] == '劇場版スタァライトネタバレ':
-                return True
-        return False
-
     def get_forward_action(self, tweet: Tweet) -> Tuple[str, Optional[int]]:
         if tweet.type == 'original':
             return 'send', None
@@ -122,11 +115,7 @@ class T2BForwarder:
                 raise AbortForwarding
 
     async def on_send_dynamic(self, tweet: Tweet, dynamic_id: Optional[int]):
-        text = ''
-        if self._check_spoiler(tweet):
-            text += '【剧透预警】本篇推文中含有少歌剧场版剧透内容\n'
-
-        text += '{}于{}'.format(
+        text = '{}于{}'.format(
             self.listener.get_author_name(tweet.author),
             tweet.get_create_time(self.display_timezone).strftime('%Y-%m-%d %H:%M:%S'))
         if tweet.type == 'original':
@@ -146,11 +135,7 @@ class T2BForwarder:
         self.save_forward_info(tweet, response['dynamic_id'])
 
     async def on_repost(self, tweet: Tweet, dynamic_id: int):
-        text = ''
-        if self._check_spoiler(tweet):
-            text += '【剧透预警】本篇推文中含有少歌剧场版剧透内容\n'
-
-        text += '{}于{}转发了此条推：\n{}'.format(
+        text = '{}于{}转发了此条推：\n{}'.format(
             self.listener.get_author_name(tweet.author),
             tweet.get_create_time(self.display_timezone).strftime(
                 '%Y-%m-%d %H:%M:%S'),
@@ -163,11 +148,7 @@ class T2BForwarder:
             await self.sender.repost_dynamic(text=text, dynamic_id=dynamic_id)
 
     async def on_comment(self, tweet: Tweet, dynamic_id: int):
-        text = ''
-        if self._check_spoiler(tweet):
-            text += '【剧透预警】本条评论中含有少歌剧场版剧透内容\n'
-
-        text += '{}于{}评论：\n{}'.format(
+        text = '{}于{}评论：\n{}'.format(
             self.listener.get_author_name(tweet.author),
             tweet.get_create_time(self.display_timezone).strftime(
                 '%Y-%m-%d %H:%M:%S'),
