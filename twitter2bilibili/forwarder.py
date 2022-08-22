@@ -166,8 +166,8 @@ class T2BForwarder:
                 await self.on_comment(tweet, dynamic_id)
         except AbortForwarding:
             logger.debug(f'Aborted tweet id {tweet.id}')
-        #except Exception as e:
-        #    logger.error(f'Error on tweet id {tweet.id}: {e}')
+        except Exception as e:
+            logger.error(f'Error on tweet id {tweet.id}: {e}')
         else:
             logger.info(f'Forwarded tweet id {tweet.id}')
 
