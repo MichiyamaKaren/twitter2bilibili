@@ -34,8 +34,9 @@ def _handle_illegal_word(func):
 
 
 class BiliSender:
-    def __init__(self, sessdata, bili_jct, buvid3) -> None:
-        self.credential = Credential(sessdata, bili_jct, buvid3)
+    def __init__(self, sessdata, bili_jct, dedeuserid) -> None:
+        self.credential = Credential(
+            sessdata=sessdata, bili_jct=bili_jct, dedeuserid=dedeuserid)
 
     @_handle_illegal_word
     async def send(self, text: str, image_streams: Optional[List[BufferedIOBase]] = None):

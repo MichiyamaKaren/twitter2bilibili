@@ -31,7 +31,7 @@ class T2BForwarder:
         self.sender = BiliSender(
             sessdata=getattr(config_object, 'BILI_SESSDATA'),
             bili_jct=getattr(config_object, 'BILI_BILI_JCT'),
-            buvid3=getattr(config_object, 'BILI_BUVID3'))
+            dedeuserid=getattr(config_object, 'BILI_DEDE'))
 
         self.display_timezone: str = getattr(config_object, 'display_timezone')
 
@@ -47,7 +47,7 @@ class T2BForwarder:
     @property
     def query(self) -> Dict:
         return {
-            'expansions': 'author_id,attachments.media_keys,referenced_tweets.id',
+            'expansions': 'author_id,attachments.media_keys,referenced_tweets.id,referenced_tweets.id.author_id',
             'tweet.fields': 'created_at,entities,in_reply_to_user_id,referenced_tweets,text',
             'media.fields': 'type,url', 'user.fields': 'username'}
 
@@ -166,8 +166,8 @@ class T2BForwarder:
                 await self.on_comment(tweet, dynamic_id)
         except AbortForwarding:
             logger.debug(f'Aborted tweet id {tweet.id}')
-        except Exception as e:
-            logger.error(f'Error on tweet id {tweet.id}: {e}')
+        #except Exception as e:
+        #    logger.error(f'Error on tweet id {tweet.id}: {e}')
         else:
             logger.info(f'Forwarded tweet id {tweet.id}')
 

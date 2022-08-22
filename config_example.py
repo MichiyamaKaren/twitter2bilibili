@@ -1,7 +1,7 @@
 # Bilibili API
 BILI_SESSDATA = 'xxx'
 BILI_BILI_JCT = 'xxx'
-BILI_BUVID3 = 'xxx'
+BILI_DEDE = 'xxx'
 
 # Twitter API
 TWITTER_BEARER_TOKEN = 'xxx'
