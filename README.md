@@ -8,4 +8,4 @@
 
 ## 引用的项目
 
-- [bilibili-api](https://github.com/MoyuScript/bilibili-api)
+- [bilibili-api](https://github.com/Nemo2011/bilibili-api)

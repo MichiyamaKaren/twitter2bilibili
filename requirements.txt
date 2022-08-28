@@ -1,6 +1,6 @@
 aiohttp==3.7.4.post0
 asyncio==3.4.3
-bilibili-api-python==11.11.2
+bilibili-api-python==12.1.0
 emoji==1.4.2
 loguru==0.5.3
 pytz==2021.1
