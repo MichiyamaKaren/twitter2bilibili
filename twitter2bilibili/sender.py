@@ -15,7 +15,9 @@ def _handle_illegal_word(func):
         '🐴': '马', '🐻': '熊', '🔥': '火', '🗼': '塔',
         '🐧': '企鹅', '💡': '灯泡', '🐎': '马', '🐠': '热带鱼',
         '🏀': '篮球', '🐶':'狗', '⚽': '足球', '🐢': '乌龟',
-        '💉': '注射器', '2️⃣': '2', '🐮':'牛', '👋': '挥手'
+        '💉': '注射器', '🐮':'牛', '👋': '挥手',
+        '0️⃣':'0','1️⃣':'1','2️⃣':'2','3️⃣':'3','4️⃣':'4',
+        '5️⃣':'5','6️⃣':'6','7️⃣':'7','8️⃣':'8','9️⃣':'9'
     }
 
     async def wrapped_func(self, text: str, *args, **kwargs):
@@ -25,7 +27,7 @@ def _handle_illegal_word(func):
         try:
             return await func(self, text=text, *args, **kwargs)
         except ResponseCodeException as e:
-            if e.code == 2200108:
+            if e.code in {2200108, 4126021}:
                 text = emoji.demojize(text, delimiters=('[emoji ', ']'))
                 return await func(self, text=text, *args, **kwargs)
             else:
