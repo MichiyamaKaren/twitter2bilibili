@@ -2,6 +2,9 @@ import aiohttp
 from datetime import datetime
 from pytz import timezone
 
+from .twitter_api import TwitterAPI
+from .utils.network import get_session
+
 from typing import Optional, Dict, List
 
 
@@ -28,9 +31,9 @@ class TwitterMedia:
             self.url = None
 
     async def get_photo(self) -> bytes:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(self.url) as response:
-                return await response.read()
+        session = get_session()
+        async with session.get(self.url) as response:
+            return await response.read()
 
 
 class TwitterPlace:
@@ -76,11 +79,11 @@ class Tweet:
             self.entities = {}
 
         if attachments is not None:
-            self.media_keys: List[str] = attachments.get('media_keys', [])
+            media_keys: List[str] = attachments.get('media_keys', [])
         else:
-            self.media_keys = []
-        self.media: List[Optional[TwitterMedia]] = [
-            self.get_from_includes(tweet_includes, 'media', mkey) for mkey in self.media_keys]
+            media_keys = []
+        self.media: Dict[str, Optional[TwitterMedia]] = {mkey: 
+            self.get_from_includes(tweet_includes, 'media', mkey) for mkey in media_keys}
 
     def _parse_time(self, create_time: str) -> datetime:
         utc_time = datetime.strptime(create_time, '%Y-%m-%dT%H:%M:%S.%fZ')
@@ -132,3 +135,32 @@ class Tweet:
             if include_type == 'tweets':
                 include_object.update({'tweet_includes': includes})
             return include_class[include_type](**include_object)
+
+    async def retrieve_media(self, api: TwitterAPI, update_self: bool = True) -> Dict[str, TwitterMedia]:
+        tweet_resp = await api.tweet_lookup(
+            tweet_id=self.id,
+            query={'expansions': 'attachments.media_keys', 'media.fields': 'type,url'})
+        media_data = tweet_resp.get('includes', {}).get('media', {})
+        retrived = {data['media_key']: TwitterMedia(**data) for data in media_data}
+        if update_self:
+            self.media.update(retrived)
+        return retrived
+
+    async def get_media(self, media_keys: Optional[List[str]] = None,
+                        twitter_api: Optional[TwitterAPI] = None,
+                        update_on_retrieve: bool = True) -> List[TwitterMedia]:
+        if media_keys is None:
+            media_keys = self.media.keys()
+
+        if any(map(lambda key: self.media.get(key, None) is None, media_keys)):
+            if twitter_api is None:
+                raise ValueError('twiter_api is needed to retrieve media data')
+            retrieved = await self.retrieve_media(twitter_api, update_on_retrieve)
+            media_dict = self.media if update_on_retrieve else retrieved
+        else:
+            media_dict = self.media
+
+        try:
+            return [media_dict[key] for key in media_keys]
+        except KeyError as e:
+            raise KeyError(f'media key {e.args[0]} is not included by this tweet')

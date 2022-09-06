@@ -21,3 +21,5 @@ subscribe_users = [
 ]
 
 display_timezone = 'Asia/Shanghai'
+
+gap_img = 'gap_img.png'

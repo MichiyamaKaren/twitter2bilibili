@@ -5,10 +5,12 @@ from loguru import logger
 
 import json
 from datetime import datetime, timedelta
+from bilibili_api.exceptions import ResponseCodeException as BiliCodeException
 
 from .listener import TwitterListener
 from .sender import BiliSender
 from .tweet import Tweet
+from .twitter_api import TwitterAPI, TwitterAPIException
 
 from typing import List, Dict, Tuple, Optional
 
@@ -25,8 +27,9 @@ class RetryForwarding(Exception):
 
 class T2BForwarder:
     def __init__(self, config_object) -> None:
+        self.api = TwitterAPI(bearer_token=getattr(config_object, 'TWITTER_BEARER_TOKEN'))
         self.listener = TwitterListener(
-            bearer_token=getattr(config_object, 'TWITTER_BEARER_TOKEN'),
+            api=self.api,
             subscribe_users=getattr(config_object, 'subscribe_users'))
         self.sender = BiliSender(
             sessdata=getattr(config_object, 'BILI_SESSDATA'),
@@ -35,11 +38,15 @@ class T2BForwarder:
 
         self.display_timezone: str = getattr(config_object, 'display_timezone')
 
+        gap_img_path = getattr(config_object, 'gap_img')
+        with open(gap_img_path, 'rb') as f:
+            self.gap_img: bytes = f.read()
+
         self._forward_info_file = 'forward_info.json'
         self._forward_info_valid_time = timedelta(weeks=1)
 
     async def _download_photos(self, tweet: Tweet) -> List[bytes]:
-        photo_media = [media for media in tweet.media if media.type == 'photo']
+        photo_media = filter(lambda m: m.type == 'photo', await tweet.get_media(twitter_api=self.api))
         download_photo_coroutines = [media.get_photo()
                                      for media in photo_media]
         return await asyncio.gather(*download_photo_coroutines)
@@ -104,7 +111,7 @@ class T2BForwarder:
                 if ref_subscribed:
                     dynamic_id = self.get_forward_dynamic_id(tweet.referenced_tweet.id)
                     if dynamic_id is not None:
-                        return ('send', dynamic_id) if tweet.media_keys else ('repost', dynamic_id)
+                        return ('send', dynamic_id) if tweet.media else ('repost', dynamic_id)
                 return 'send', None
             elif tweet.type == 'replied_to':
                 if ref_subscribed:
@@ -131,7 +138,13 @@ class T2BForwarder:
                 text += f'https://t.bilibili.com/{dynamic_id}'
 
         photos = await self._download_photos(tweet)
-        response = await self.sender.send(text=text, image_streams=photos)
+        if tweet.type == 'quoted':
+            referenced_photos = await self._download_photos(tweet.referenced_tweet)
+            img = photos + [self.gap_img] + referenced_photos
+        else:
+            img = photos
+
+        response = await self.sender.send(text=text, image_streams=img)
         self.save_forward_info(tweet, response['dynamic_id'])
 
     async def on_repost(self, tweet: Tweet, dynamic_id: int):
@@ -166,10 +179,14 @@ class T2BForwarder:
                 await self.on_comment(tweet, dynamic_id)
         except AbortForwarding:
             logger.debug(f'Aborted tweet id {tweet.id}')
+        except TwitterAPIException as e:
+            logger.error(f'Twitter API error {e.code} on tweet id {tweet.id}: {e.data}')
+        except BiliCodeException as e:
+            logger.error(f'Bilibili Error {e.code} on tweet id {tweet.id}, return data: {e.raw}')
         except Exception as e:
             logger.error(f'Error on tweet id {tweet.id}: {e}')
         else:
-            logger.info(f'Forwarded tweet id {tweet.id}')
+            logger.info(f'Forwarded tweet id {tweet.id}, action: {action}')
 
     def run(self):
         loop = asyncio.get_event_loop()
