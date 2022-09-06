@@ -56,11 +56,8 @@ class TwitterListener:
             **d, tweet_includes=tweets_response['includes']) for d in tweet_dicts]
         return tweets
 
-    async def _try_connect_until_sucseed(self, query: Dict, retry_interval: float = 300) -> ClientResponse:
+    async def _try_connect_until_succeed(self, query: Dict, retry_interval: float = 300) -> ClientResponse:
         while True:
-            # 推特filtered stream同时只允许一个连接，客户端断开之后在连接在服务端会保持一段时间，故睡一段时间再尝试重连
-            # 间隔时间过短会导致尝试总时间拉长（原因不明），经测试间隔300s不会多次重连
-            await asyncio.sleep(retry_interval)
             try:
                 response = await self.api.get_filtered_stream(query)
             except TwitterAPIException as e:
@@ -71,11 +68,15 @@ class TwitterListener:
                 logger.info('Connected.')
                 return response
 
+            # 推特filtered stream同时只允许一个连接，客户端断开之后在连接在服务端会保持一段时间，故睡一段时间再尝试重连
+            # 间隔时间过短会导致尝试总时间拉长（原因不明），经测试间隔300s不会多次重连
+            await asyncio.sleep(retry_interval)
+
     async def listen(self, initialize: Callable[['TwitterListener'], Coroutine], query: Dict,
                      tweet_handler: Callable[[Tweet], Coroutine]):
         await initialize(self)
         while True:
-            response = await self._try_connect_until_sucseed(query)
+            response = await self._try_connect_until_succeed(query)
             try:
                 async for response_line in response.content:
                     if response_line != b'\r\n':  # '\r\n'为filtered stream的keep alive信号
