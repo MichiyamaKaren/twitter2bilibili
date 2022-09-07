@@ -140,7 +140,10 @@ class T2BForwarder:
         photos = await self._download_photos(tweet)
         if tweet.type == 'quoted':
             referenced_photos = await self._download_photos(tweet.referenced_tweet)
-            img = photos + [self.gap_img] + referenced_photos
+            if referenced_photos:
+                img = photos + [self.gap_img] + referenced_photos
+            else:
+                img = photos
         else:
             img = photos
 
